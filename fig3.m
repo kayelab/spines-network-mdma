@@ -6,7 +6,7 @@ load([pwd '\data\baselined_freezing.mat']);
 all_traces = [cue_traces.MDMA; cue_traces.Saline];  % concatenate cohorts
 all_freeze = [pre_cue_corrected_freezing.MDMA;pre_cue_corrected_freezing.Saline];
 all_ITI_vecs = vertcat(ITI_traces.Saline, ITI_traces.MDMA);
-
+all_untethered_freezing = [untethered_freezing.Saline; untethered_freezing.MDMA];
 %% ── Color palette ────────────────────────────────────────────────────────
 MDMA_color   = [173,  84,  50] / 255;
 Saline_color = [ 88,  88,  90] / 255;
@@ -78,13 +78,15 @@ for run_mice = 1:2*n_mice_per_group
 end
 
 %% plot panel B
+n_mice_per_group_u = size(untethered_freezing.Saline,1);
+number_of_days = size(untethered_freezing.Saline,2);
 figure
 set(gcf, 'Position', get(0, 'Screensize'));
 hold on
 S_mean = mean(untethered_freezing.Saline,'omitnan');
-S_sem = std(untethered_freezing.Saline)/sqrt(n_mice_per_group);
+S_sem = std(untethered_freezing.Saline)/sqrt(n_mice_per_group_u);
 M_mean = mean(untethered_freezing.MDMA,'omitnan');
-M_sem = std(untethered_freezing.MDMA)/sqrt(n_mice_per_group);
+M_sem = std(untethered_freezing.MDMA)/sqrt(n_mice_per_group_u);
 
 plot(days,S_mean,'.-','Color',Saline_color,'LineWidth',2,'MarkerSize',35)
 plot(days,M_mean,'.-','Color',MDMA_color,'LineWidth',2,'MarkerSize',35)
@@ -101,6 +103,25 @@ ylabel('Cue evoked freezing (%)')
 
 ax = gca;
 style_axes(ax, 25);
+
+%  Repeated-Measures ANOVA for untethered freezing 
+dayLabels_B = {'Day2','Day3','Day4','Day5'};
+n_mice_per_group_u = size(untethered_freezing.Saline, 1);  % use actual size (12)
+treatment_B = [repmat({'Saline'}, n_mice_per_group_u, 1); repmat({'MDMA'}, n_mice_per_group_u, 1)];
+mouseID_B   = (1:2*n_mice_per_group_u)';
+
+T_B = array2table(all_untethered_freezing, 'VariableNames', dayLabels_B);
+T_B.Treatment = categorical(treatment_B);
+T_B.MouseID   = mouseID_B;
+
+withinDesign_B = table((1:number_of_days)', 'VariableNames', {'Day'});
+withinDesign_B.Day = categorical(withinDesign_B.Day);
+
+rm_B = fitrm(T_B, 'Day2,Day3,Day4,Day5 ~ Treatment', 'WithinDesign', withinDesign_B);
+ranovatbl_B = ranova(rm_B, 'WithinModel', 'Day');
+disp('=== Repeated-Measures ANOVA Table for untethered freezing ===');
+disp(ranovatbl_B);
+
 %% plot panels F-G
 figure;
 set(gcf, 'Position', get(0, 'Screensize'));
@@ -174,6 +195,29 @@ xlabel('Day',        'FontSize', fontSz);
 ylabel('Freezing mean % from BL', 'FontSize', fontSz);
 legend({'Saline','MDMA'}, 'Location', 'northeast', 'FontSize', 24, 'Box', 'off');
 style_axes(gca, fontSz);
+
+% Statistics panel G — RM-ANOVA on late-cue freezing 
+
+dayLabels_G = {'Day2','Day3','Day4','Day5'};
+
+data_G      = [mean_offset_freezing.Saline; mean_offset_freezing.MDMA];  % (2*n_mice) x n_days
+treatment_G = [repmat({'Saline'}, n_mice_per_group, 1); ...
+    repmat({'MDMA'},   n_mice_per_group, 1)];
+mouseID_G   = (1 : 2*n_mice_per_group)';
+
+T_G = array2table(data_G, 'VariableNames', dayLabels_G);
+T_G.Treatment = categorical(treatment_G);
+T_G.MouseID   = mouseID_G;
+
+withinDesign_G     = table((1:number_of_days)', 'VariableNames', {'Day'});
+withinDesign_G.Day = categorical(withinDesign_G.Day);
+
+rm_G       = fitrm(T_G, 'Day2,Day3,Day4,Day5 ~ Treatment', 'WithinDesign', withinDesign_G);
+ranova_G   = ranova(rm_G, 'WithinModel', 'Day');
+between_G  = anova(rm_G);
+
+disp('=== Panel G: RM-ANOVA on late-cue freezing (±10 s around cue offset) ===');
+disp(ranova_G);
 
 %% plots panel H-I
 figure;
